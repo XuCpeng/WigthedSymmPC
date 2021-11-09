@@ -1,0 +1,367 @@
+---
+title: "Pivot Coordinates Notebook"
+author: "XuCpeng"
+date: "7/23/2021"
+output:
+  html_notebook: 
+    theme: flatly
+    highlight: pygments
+    toc_depth: 4
+---
+
+```{r}
+library(readxl)
+library(robCompositions)
+library(robustHD)
+library(compositions)
+library("pheatmap")
+source('weightPivotCoord.R')
+source("WSymmPC.R")
+```
+
+```{r}
+plotHeatmap <- function(data,main,labels_row_col){
+    fig <- pheatmap(data,
+                    fontsize = 10, fontsize_row = 7,fontsize_col=8,
+                    cluster_row = FALSE,cluster_col=FALSE,
+                    main = main,
+                    labels_row = labels_row_col,
+                    labels_col = labels_row_col)
+    return(fig)
+}
+```
+
+## Hron2021 Test
+
+```{r}
+Product <- read_excel("Product_10.5066P9KUH0F6_DATA_Processed.xls",range = "B1:O40",col_names=TRUE)
+Product_mx <- as.matrix(Product)
+
+Product_mx<-impAll(Product_mx)
+
+D_p <- ncol(Product_mx)
+N_p <- nrow(Product_mx)
+Rs_p <- matrix(NA,nrow=D_p,ncol=D_p)
+Rp_p <- Rs_p
+rownames(Rs_p) <- colnames(Product_mx)
+colnames(Rs_p) <- colnames(Product_mx)
+Rp_wspc_p <- Rs_p
+Rs_wspc_p <- Rs_p
+
+for(i in 1:D_p){
+    for(j in 1:D_p){
+        Z <- pivotCoord(Product_mx[,c(i,j,(1:D_p)[-c(i,j)])],method="symm")
+        Rs_p[i,j] <- cor(Z[,1:2],method="spearman")[1,2]
+        Rp_p[i,j] <- cor(Z[,1:2],method="pearson")[1,2]
+    }
+}
+
+for(i in 1:(D_p)){
+    for(j in i:D_p){
+        if(j==i){
+            Rs_wspc_p[i,i] <- 1
+            Rp_wspc_p[i,i] <- 1
+        }else{
+            Z <- weightSymmPivotCoord(Product_mx,pivotvar1 = i,pivotvar2 = j)
+            x <- cor(Z[["ws1"]],Z[["ws2"]],method="spearman")
+            Rs_wspc_p[i,j] <- x
+            Rs_wspc_p[j,i] <- x
+            
+            x2 <- cor(Z[["ws1"]],Z[["ws2"]],method="pearson")
+            Rp_wspc_p[i,j] <- x2
+            Rp_wspc_p[j,i] <- x2
+        }
+    }
+}
+```
+
+```{r,fig.width=6, fig.height=4}
+Rs_wspc_p_fig <- plotHeatmap(Rs_wspc_p, labels_row_col=colnames(Product_mx),
+                             main = "Product - Spearman Correlations with W.Symm.pivot coord.")
+```
+
+```{r,fig.width=6, fig.height=4}
+Rs_p_fig <- plotHeatmap(Rs_p, labels_row_col=colnames(Product_mx),
+                             main = "Product - Spearman Correlations with Symm.pivot coord.")
+```
+
+## 1. Import Data
+
+```{r}
+Datanhao <- read_excel("Datanhao_wspc.xlsx", range = "C1:BH63",col_names = TRUE)
+Adaohai <- read_excel("Adaohai7-bdl0005-Zr(AE)_wspc.xlsx", range = "C1:BM34",col_names = TRUE)
+Datanhao_mx <- as.matrix(Datanhao)
+Adaohai_mx <- as.matrix(Adaohai)
+```
+
+## 2. Prepare Data
+
+```{r}
+D_d <- ncol(Datanhao_mx)
+N_d <- nrow(Datanhao_mx)
+
+D_a <- ncol(Adaohai_mx)
+N_a <- nrow(Adaohai_mx)
+
+Rs_d <- matrix(NA,nrow=D_d,ncol=D_d)
+Rs_a <- matrix(NA,nrow=D_a,ncol=D_a)
+
+rownames(Rs_d) <- colnames(Datanhao_mx)
+colnames(Rs_d) <- colnames(Datanhao_mx)
+
+rownames(Rs_a) <- colnames(Adaohai_mx)
+colnames(Rs_a) <- colnames(Adaohai_mx)
+
+Rp_d <- Rs_d
+Rp_a <- Rs_a
+
+Rs_wspc_d <- Rs_d
+Rs_wspc_a <- Rs_a
+
+Rp_wspc_d <- Rs_d
+Rp_wspc_a <- Rs_a
+
+col_labels_d = c(expression("SiO"[2]),expression("TiO"[2]),expression(paste("Al"[2],"O"[3])),
+                 expression(paste("Fe"[2],"O"[3])),"MgO","CaO","MnO",
+                 expression(paste("K"[2],"O")),expression(paste("P"[2],"O"[5])),
+                 colnames(Datanhao_mx)[(10:D_d)])
+col_labels_a = c(expression(paste("Al"[2],"O"[3])),expression("SiO"[2]),"CaO",
+                 expression(paste("K"[2],"O")),expression("TiO"[2]),
+                 expression(paste("Fe"[2],"O"[3])),"MgO",expression(paste("Na"[2],"O")),
+                 "MnO",expression(paste("P"[2],"O"[5])),colnames(Adaohai_mx)[(11:D_a)])
+```
+
+## 3. Run 
+
+### Pivot Coordinates 
+
+```{r}
+pv_a<-robCompositions::pivotCoord(Adaohai_mx)
+pv_d<-robCompositions::pivotCoord(Datanhao_mx)
+colnames(pv_a)<-colnames(Adaohai_mx)[1:D_a-1]
+colnames(pv_d)<-colnames(Datanhao_mx)[1:D_d-1]
+
+
+write.csv(pv_a,file = "PV_adaohai.csv")
+write.csv(pv_d,file = "PV_datanhao.csv")
+```
+
+
+### 3.1 Weight pivot coordinates (Not Finished)
+
+```{r}
+res_d <-weightPivotCoord(Datanhao_mx, pow = 2, pivotvar = 1)
+res_a <- weightPivotCoord(Adaohai_mx, pow = 2, pivotvar = 1)
+
+WPC_d <- res_d[['WPC']]
+colnames(WPC_d) <- colnames(Datanhao_mx)[1:D_d-1]
+w_d <- res_d[['w']]
+
+WPC_a <- res_a[['WPC']]
+colnames(WPC_a) <- colnames(Adaohai_mx)[1:D_a-1]
+w_a <- res_a[['w']]
+
+#tmp2=PLR(Adaohai_mx)
+```
+
+```{r}
+write.csv(WPC_d,file = "WPC_datanhao.csv")
+write.csv(WPC_a,file = "WPC_adaohai.csv")
+```
+
+### 3.2 Symmetric pivot coordinates
+
+```{r}
+for(i in 1:D_d){
+    for(j in 1:D_d){
+        Z <- pivotCoord(Datanhao_mx[,c(i,j,(1:D_d)[-c(i,j)])],method="symm")
+        Rs_d[i,j] <- cor(Z[,1:2],method="spearman")[1,2]
+        Rp_d[i,j] <- cor(Z[,1:2],method="pearson")[1,2]
+    }
+}
+
+for(i in 1:D_a){
+    for(j in 1:D_a){
+        Z <- pivotCoord(Adaohai_mx[,c(i,j,(1:D_a)[-c(i,j)])],method="symm")
+        Rs_a[i,j] <- cor(Z[,1:2],method="spearman")[1,2]
+        Rp_a[i,j] <- cor(Z[,1:2],method="pearson")[1,2]
+    }
+}
+```
+
+```{r}
+# spearman
+write.csv(Rs_d,file = "Rs_datanhao.csv")
+write.csv(Rs_a,file = "Rs_adaohai.csv")
+
+# pearson
+write.csv(Rp_d,file = "Rp_datanhao.csv")
+write.csv(Rp_a,file = "Rp_adaohai.csv")
+```
+
+### 3.3 **Weighted** Symmetric pivot coordinates
+
+#### W.Symm.PC Test:
+
+```{r}
+expendituresTop2=expenditures[1:2,1:3]
+A = (1/(sqrt(12-6*sqrt(3))))
+
+A*log(expendituresTop2[,1]
+      /((expendituresTop2[,2]^(2-sqrt(3)))*(expendituresTop2[,3]^(-1+sqrt(3)))))
+
+A*log(expendituresTop2[,2]
+      /((expendituresTop2[,1]^(2-sqrt(3)))*(expendituresTop2[,3]^(-1+sqrt(3)))))
+
+weightSymmPivotCoord(expendituresTop2)
+```
+
+#### W.Symm.PC on Datanhao and Adaohai datasets:
+
+```{r}
+for(i in 1:(D_d)){
+    for(j in i:D_d){
+        if(j==i){
+            Rs_wspc_d[i,i] <- 1
+            Rp_wspc_d[i,i] <- 1
+        }else{
+            Z <- weightSymmPivotCoord(Datanhao_mx,pivotvar1 = i,pivotvar2 = j)
+            x <- cor(Z[["ws1"]],Z[["ws2"]],method="spearman")
+            Rs_wspc_d[i,j] <- x
+            Rs_wspc_d[j,i] <- x
+            
+            x2 <- cor(Z[["ws1"]],Z[["ws2"]],method="pearson")
+            Rp_wspc_d[i,j] <- x2
+            Rp_wspc_d[j,i] <- x2
+        }
+    }
+}
+
+for(i in 1:(D_a)){
+    for(j in i:D_a){
+        if(j==i){
+            Rs_wspc_a[i,i] <- 1
+            Rp_wspc_a[i,i] <- 1
+        }else{
+            Z <- weightSymmPivotCoord(Adaohai_mx,pivotvar1 = i,pivotvar2 = j)
+            x <- cor(Z[["ws1"]],Z[["ws2"]],method="spearman")
+            Rs_wspc_a[i,j] <- x
+            Rs_wspc_a[j,i] <- x
+            
+            x2 <- cor(Z[["ws1"]],Z[["ws2"]],method="pearson")
+            Rp_wspc_a[i,j] <- x2
+            Rp_wspc_a[j,i] <- x2
+        }
+    }
+}
+```
+
+```{r}
+# spearman
+write.csv(Rs_wspc_d,file = "Rs_wspc_datanhao.csv")
+write.csv(Rs_wspc_a,file = "Rs_wspc_adaohai.csv")
+# pearson
+write.csv(Rp_wspc_d,file = "Rp_wspc_datanhao.csv")
+write.csv(Rp_wspc_a,file = "Rp_wspc_adaohai.csv")
+```
+
+## 4. Plot
+
+### 4.1 Datanhao: Pearson correlation coefficients with symmetric pivot coordinates
+
+```{r,fig.width=12, fig.height=8}
+Rp_d_fig <- plotHeatmap(Rp_d,
+                        main = "Datanhao - Pearson Correlations with Symm.pivot coord.",
+                        labels_row_col = col_labels_d)
+```
+
+```{r}
+ggsave(Rp_d_fig, filename="Datanhao-Pearson Correlations with Symm_pivot coord.tiff",
+       dpi = 320,units="px",width = 3840,height = 2160)
+```
+
+### 4.2 Datanhao: **Weighted** Pearson correlation coefficients with symmetric pivot coordinates
+
+```{r,fig.width=12, fig.height=8}
+Rp_wspc_d_fig <- plotHeatmap(Rp_wspc_d, 
+                             main = "Datanhao - Pearson Correlations with W.Symm.pivot coord.",
+                             labels_row_col = col_labels_d)
+```
+
+```{r}
+ggsave(Rp_wspc_d_fig, filename="Datanhao-Pearson Correlations with W_Symm_pivot coord.tiff",
+       dpi = 320,units="px",width = 3840,height = 2160)
+```
+
+### 4.3 Adaohai: Pearson correlation coefficients with symmetric pivot coordinates
+
+```{r,fig.width=12, fig.height=8}
+Rp_a_fig <- plotHeatmap(Rp_a,
+                        main="Adaohai - Pearson Correlations with Symm.pivot coord.",
+                        labels_row_col = col_labels_a)
+```
+
+```{r}
+ggsave(Rp_a_fig, filename="Adaohai-Pearson Correlations with Symm_pivot coord.tiff",
+       dpi = 320,units="px",width = 3840,height = 2160)
+```
+
+### 4.4 Adaohai: **Weighted** Pearson correlation coefficients with symmetric pivot coordinates
+
+```{r,fig.width=12, fig.height=8}
+Rp_wspc_a_fig <- plotHeatmap(Rp_wspc_a,
+                             main = "Adaohai - Pearson Correlations with W.Symm.pivot coord.",
+                             labels_row_col = col_labels_a)
+```
+
+```{r}
+ggsave(Rp_wspc_a_fig, filename="Adaohai-Pearson Correlations with W_Symm_pivot coord.tiff",
+       dpi = 320,units="px",width = 3840,height = 2160)
+```
+
+---
+
+### 4.5 Datanhao: Spearman correlation coefficients with symmetric pivot coordinates
+
+```{r,fig.width=6, fig.height=4}
+Rs_d_fig <- plotHeatmap(Rs_d,main = "Datanhao - Spearman Correlations with Symm.pivot coord.",labels_row_col = col_labels_d)
+```
+
+```{r}
+ggsave(Rs_d_fig, filename="Datanhao-Spearman Correlations with Symm_pivot coord.tiff",
+       dpi = 320,units="px",width = 3840,height = 2160)
+```
+
+### 4.6 Datanhao: **Weighted** Spearman correlation coefficients with symmetric pivot coordinates
+
+```{r,fig.width=6, fig.height=4}
+Rs_wspc_d_fig <- plotHeatmap(Rs_wspc_d,main = "Datanhao - Spearman Correlations with W.Symm.pivot coord.",labels_row_col = col_labels_d)
+```
+
+```{r}
+ggsave(Rs_wspc_d_fig, filename="Datanhao-Spearman Correlations with W_Symm_pivot coord.tiff",
+       dpi = 320,units="px",width = 3840,height = 2160)
+```
+
+### 4.7 Adaohai: Spearman correlation coefficients with symmetric pivot coordinates
+
+```{r,fig.width=6, fig.height=4}
+Rs_a_fig <- plotHeatmap(Rs_a,main="Adaohai - Spearman Correlations with Symm.pivot coord.",labels_row_col = col_labels_a)
+```
+
+```{r}
+ggsave(Rs_a_fig, filename="Adaohai-Spearman Correlations with Symm_pivot coord.tiff",
+       dpi = 320,units="px",width = 3840,height = 2160)
+```
+
+### 4.8 Adaohai: **Weighted** Spearman correlation coefficients with symmetric pivot coordinates
+
+```{r,fig.width=6, fig.height=4}
+Rs_wspc_a_fig <- plotHeatmap(Rs_wspc_a,main = "Adaohai - Spearman Correlations with W.Symm.pivot coord.",labels_row_col = col_labels_a)
+```
+
+```{r}
+ggsave(Rs_wspc_a_fig, filename="Adaohai-Spearman Correlations with W_Symm_pivot coord.tiff",
+       dpi = 320,units="px",width = 3840,height = 2160)
+```
+

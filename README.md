@@ -1,1 +1,1 @@
-WigthedSymmPC
+WSymmPC
